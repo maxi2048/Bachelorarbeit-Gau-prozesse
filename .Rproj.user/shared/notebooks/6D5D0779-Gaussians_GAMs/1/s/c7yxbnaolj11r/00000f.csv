@@ -1,0 +1,9 @@
+"0",""
+"0","# =========================================================="
+"0","# 8. GAM-Smooths direkt anschauen"
+"0","# =========================================================="
+"0","cat(""8) Visualisiere die geschätzten glatten Funktionen ...\n\n"")"
+"1","8) Visualisiere die geschätzten glatten Funktionen ...
+
+"
+"0","plot(gam_fit_add, pages = 1)"

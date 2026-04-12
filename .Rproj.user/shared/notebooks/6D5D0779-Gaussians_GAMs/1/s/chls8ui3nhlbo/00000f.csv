@@ -1,0 +1,43 @@
+"0",""
+"0","# =========================================================="
+"0","# 4. Was bedeutet s(x)?"
+"0","# =========================================================="
+"0","cat(""4) Bedeutung von s(x):\n"")"
+"1","4) Bedeutung von s(x):
+"
+"0","cat(""- s(x1) bedeutet: der Effekt von x1 wird als glatte Funktion geschätzt.\n"")"
+"1","- s(x1) bedeutet: der Effekt von x1 wird als glatte Funktion geschätzt.
+"
+"0","cat(""- Das Modell sucht also nicht einfach eine Gerade, sondern eine flexible Kurve.\n"")"
+"1","- Das Modell sucht also nicht einfach eine Gerade, sondern eine flexible Kurve.
+"
+"0","cat(""- Dasselbe gilt für s(x2).\n\n"")"
+"1","- Dasselbe gilt für s(x2).
+
+"
+"0","# =========================================================="
+"0","# 5. Vorhersagen berechnen"
+"0","# =========================================================="
+"0","cat(""5) Berechne Vorhersagen ...\n\n"")"
+"1","5) Berechne Vorhersagen ...
+
+"
+"0","data$lm_pred <- predict(lm_fit, newdata = data)"
+"0","data$gam_pred <- predict(gam_fit_add, newdata = data)"
+"0",""
+"0","data$lm_res <- data$y - data$lm_pred"
+"0","data$gam_res <- data$y - data$gam_pred"
+"0",""
+"0","rmse <- function(obs, pred) sqrt(mean((obs - pred)^2))"
+"0","mae <- function(obs, pred) mean(abs(obs - pred))"
+"0",""
+"0","results <- data.frame("
+"0","  Modell = c(""Lineares Modell"", ""Additives GAM""),"
+"0","  RMSE = c(rmse(data$y, data$lm_pred), rmse(data$y, data$gam_pred)),"
+"0","  MAE  = c(mae(data$y, data$lm_pred),  mae(data$y, data$gam_pred))"
+"0",")"
+"0",""
+"0","cat(""Vergleich der Modellgüte:\n"")"
+"1","Vergleich der Modellgüte:
+"
+"0","print(results)"

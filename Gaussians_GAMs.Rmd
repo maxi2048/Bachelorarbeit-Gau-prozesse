@@ -1,0 +1,742 @@
+---
+title: "Gaussian_Gams"
+output: html_document
+date: "2026-04-03"
+---
+
+```{r}
+############################################################
+# DIDAKTISCHES GAM-SKRIPT
+# Ziel:
+# 1) Verstehen, was ein GAM ist
+# 2) Sehen, wie nichtlineare Zusammenhänge modelliert werden
+# 3) Diagnostische Plots erzeugen
+# 4) Unterschied zwischen Wahrheit, Vorhersage und Residuen sehen
+############################################################
+
+# ==========================================================
+# 0. Pakete
+# ==========================================================
+required_packages <- c("mgcv", "ggplot2")
+to_install <- required_packages[!required_packages %in% rownames(installed.packages())]
+if (length(to_install) > 0) install.packages(to_install)
+
+library(mgcv)
+library(ggplot2)
+
+set.seed(123)
+
+cat("=====================================================\n")
+cat(" START: Einführung in GAMs\n")
+cat("=====================================================\n\n")
+
+
+```
+
+```{r}
+
+# ==========================================================
+# 1. Simulierte Daten erzeugen
+# ==========================================================
+cat("1) Simuliere Daten mit nichtlinearen Zusammenhängen ...\n\n")
+
+n <- 800
+
+x1 <- runif(n, -3, 3)
+x2 <- runif(n, 0, 5)
+
+# Wahre nichtlineare Beziehung
+# x1 wirkt sinusförmig, x2 quadratisch / gekrümmt
+f_true <- 2 * sin(x1) + 0.6 * (x2 - 2.5)^2 - 1.5
+
+# Beobachtete Zielvariable mit Rauschen
+y <- f_true + rnorm(n, sd = 0.5)
+
+data <- data.frame(x1 = x1, x2 = x2, y = y, f_true = f_true)
+
+cat("Erste Zeilen des Datensatzes:\n")
+print(head(data))
+cat("\n")
+
+cat("Zusammenfassung des Datensatzes:\n")
+print(summary(data))
+cat("\n")
+
+```
+
+```{r}
+
+# ==========================================================
+# 2. Erste explorative Plots
+# ==========================================================
+cat("2) Erzeuge erste explorative Plots ...\n\n")
+
+p1 <- ggplot(data, aes(x1, y)) +
+  geom_point(alpha = 0.35) +
+  labs(title = "y gegen x1", x = "x1", y = "y") +
+  theme_minimal()
+
+p2 <- ggplot(data, aes(x2, y)) +
+  geom_point(alpha = 0.35) +
+  labs(title = "y gegen x2", x = "x2", y = "y") +
+  theme_minimal()
+
+p3 <- ggplot(data, aes(y)) +
+  geom_histogram(bins = 40) +
+  labs(title = "Verteilung der Zielvariable y", x = "y", y = "Häufigkeit") +
+  theme_minimal()
+
+print(p1)
+print(p2)
+print(p3)
+
+cat("Interpretation:\n")
+cat("- In den Scatterplots sieht man, dass die Zusammenhänge nicht einfach linear sind.\n")
+cat("- Genau dafür sind GAMs gedacht.\n\n")
+
+
+```
+
+
+```{r}
+# ==========================================================
+# 3. Vergleich: lineares Modell vs GAM
+# ==========================================================
+cat("3) Vergleiche lineares Modell und GAM ...\n\n")
+
+lm_fit <- lm(y ~ x1 + x2, data = data)
+
+gam_fit_add <- gam(y ~ s(x1) + s(x2), data = data, method = "REML")
+
+cat("Zusammenfassung lineares Modell:\n")
+print(summary(lm_fit))
+cat("\n")
+
+cat("Zusammenfassung additives GAM:\n")
+print(summary(gam_fit_add))
+cat("\n")
+
+cat("Wichtige Idee:\n")
+cat("- lm(y ~ x1 + x2) erzwingt lineare Effekte.\n")
+cat("- gam(y ~ s(x1) + s(x2)) erlaubt glatte, nichtlineare Effekte.\n\n")
+
+```
+
+```{r}
+
+# ==========================================================
+# 4. Was bedeutet s(x)?
+# ==========================================================
+cat("4) Bedeutung von s(x):\n")
+cat("- s(x1) bedeutet: der Effekt von x1 wird als glatte Funktion geschätzt.\n")
+cat("- Das Modell sucht also nicht einfach eine Gerade, sondern eine flexible Kurve.\n")
+cat("- Dasselbe gilt für s(x2).\n\n")
+
+# ==========================================================
+# 5. Vorhersagen berechnen
+# ==========================================================
+cat("5) Berechne Vorhersagen ...\n\n")
+
+data$lm_pred <- predict(lm_fit, newdata = data)
+data$gam_pred <- predict(gam_fit_add, newdata = data)
+
+data$lm_res <- data$y - data$lm_pred
+data$gam_res <- data$y - data$gam_pred
+
+rmse <- function(obs, pred) sqrt(mean((obs - pred)^2))
+mae <- function(obs, pred) mean(abs(obs - pred))
+
+results <- data.frame(
+  Modell = c("Lineares Modell", "Additives GAM"),
+  RMSE = c(rmse(data$y, data$lm_pred), rmse(data$y, data$gam_pred)),
+  MAE  = c(mae(data$y, data$lm_pred),  mae(data$y, data$gam_pred))
+)
+
+cat("Vergleich der Modellgüte:\n")
+print(results)
+cat("\n")
+
+```
+
+```{r}
+
+# ==========================================================
+# 6. Beobachtet vs vorhergesagt
+# ==========================================================
+cat("6) Beobachtet vs vorhergesagt ...\n\n")
+
+p_lm_fit <- ggplot(data, aes(y, lm_pred)) +
+  geom_point(alpha = 0.35) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(title = "Beobachtet vs Vorhersage: lineares Modell",
+       x = "Beobachtet", y = "Vorhergesagt") +
+  theme_minimal()
+
+p_gam_fit <- ggplot(data, aes(y, gam_pred)) +
+  geom_point(alpha = 0.35) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(title = "Beobachtet vs Vorhersage: additives GAM",
+       x = "Beobachtet", y = "Vorhergesagt") +
+  theme_minimal()
+
+print(p_lm_fit)
+print(p_gam_fit)
+
+cat("Interpretation:\n")
+cat("- Je näher die Punkte an der Diagonalen liegen, desto besser passt das Modell.\n")
+cat("- Typischerweise ist das GAM hier klar besser als das lineare Modell.\n\n")
+
+# ==========================================================
+# 7. Residuenplots
+# ==========================================================
+cat("7) Residuen untersuchen ...\n\n")
+
+p_lm_res_hist <- ggplot(data, aes(lm_res)) +
+  geom_histogram(bins = 40) +
+  labs(title = "Residuen des linearen Modells", x = "Residual") +
+  theme_minimal()
+
+p_gam_res_hist <- ggplot(data, aes(gam_res)) +
+  geom_histogram(bins = 40) +
+  labs(title = "Residuen des GAM", x = "Residual") +
+  theme_minimal()
+
+p_lm_res_fit <- ggplot(data, aes(lm_pred, lm_res)) +
+  geom_point(alpha = 0.35) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Residuen vs Vorhersage: lineares Modell",
+       x = "Vorhersage", y = "Residual") +
+  theme_minimal()
+
+p_gam_res_fit <- ggplot(data, aes(gam_pred, gam_res)) +
+  geom_point(alpha = 0.35) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Residuen vs Vorhersage: GAM",
+       x = "Vorhersage", y = "Residual") +
+  theme_minimal()
+
+print(p_lm_res_hist)
+print(p_gam_res_hist)
+print(p_lm_res_fit)
+print(p_gam_res_fit)
+
+cat("Interpretation:\n")
+cat("- Gute Residuenplots zeigen möglichst wenig Struktur.\n")
+cat("- Wenn noch ein Muster sichtbar ist, fehlt dem Modell etwas.\n\n")
+
+```
+
+```{r}
+
+# ==========================================================
+# 8. GAM-Smooths direkt anschauen
+# ==========================================================
+cat("8) Visualisiere die geschätzten glatten Funktionen ...\n\n")
+
+plot(gam_fit_add, pages = 1)
+
+cat("Interpretation der mgcv-Plots:\n")
+cat("- Jeder Plot zeigt den geschätzten Effekt einer Kovariate.\n")
+cat("- Auf der x-Achse liegt die Kovariate.\n")
+cat("- Auf der y-Achse liegt ihr geschätzter partieller Beitrag zum linearen Prädiktor.\n")
+cat("- Die Kurvenform zeigt Nichtlinearität.\n\n")
+
+# ==========================================================
+# 9. Modell-Diagnostik
+# ==========================================================
+cat("9) Führe GAM-Diagnostik aus ...\n\n")
+
+gam.check(gam_fit_add)
+
+cat("Wichtige Punkte bei gam.check():\n")
+cat("- Residuen sollten nicht stark systematisch auffällig sein.\n")
+cat("- Der k-Index hilft zu prüfen, ob die Basisdimension zu klein gewählt wurde.\n")
+cat("- Wenn k zu klein ist, kann das Modell zu unflexibel sein.\n\n")
+
+# ==========================================================
+# 10. Interaktion mit Tensorprodukt
+# ==========================================================
+cat("10) Jetzt ein GAM mit Interaktion zwischen x1 und x2 ...\n\n")
+
+gam_fit_te <- gam(y ~ te(x1, x2), data = data, method = "REML")
+
+cat("Zusammenfassung GAM mit Tensorprodukt te(x1, x2):\n")
+print(summary(gam_fit_te))
+cat("\n")
+
+data$gam_te_pred <- predict(gam_fit_te, newdata = data)
+data$gam_te_res  <- data$y - data$gam_te_pred
+
+results2 <- data.frame(
+  Modell = c("Lineares Modell", "Additives GAM", "GAM mit te(x1, x2)"),
+  RMSE = c(
+    rmse(data$y, data$lm_pred),
+    rmse(data$y, data$gam_pred),
+    rmse(data$y, data$gam_te_pred)
+  ),
+  MAE = c(
+    mae(data$y, data$lm_pred),
+    mae(data$y, data$gam_pred),
+    mae(data$y, data$gam_te_pred)
+  )
+)
+
+cat("Vergleich aller drei Modelle:\n")
+print(results2)
+cat("\n")
+
+cat("Bedeutung von te(x1, x2):\n")
+cat("- Das Modell erlaubt jetzt eine gemeinsame glatte Funktion von x1 und x2.\n")
+cat("- Das ist mehr als nur s(x1) + s(x2).\n")
+cat("- Damit können auch nichtlineare Wechselwirkungen modelliert werden.\n\n")
+
+```
+
+```{r}
+# ==========================================================
+# 11. Vergleich der Residuen
+# ==========================================================
+cat("11) Vergleiche die Residuen des additiven GAM und des Interaktions-GAM ...\n\n")
+
+p_add_res <- ggplot(data, aes(gam_pred, gam_res)) +
+  geom_point(alpha = 0.35) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Residuen vs Vorhersage: additives GAM",
+       x = "Vorhersage", y = "Residual") +
+  theme_minimal()
+
+p_te_res <- ggplot(data, aes(gam_te_pred, gam_te_res)) +
+  geom_point(alpha = 0.35) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Residuen vs Vorhersage: GAM mit te(x1, x2)",
+       x = "Vorhersage", y = "Residual") +
+  theme_minimal()
+
+print(p_add_res)
+print(p_te_res)
+
+# ==========================================================
+# 12. Was kann ein GAM? Was kann es nicht?
+# ==========================================================
+cat("=====================================================\n")
+cat(" INTERPRETATION: Eigenschaften von GAMs\n")
+cat("=====================================================\n\n")
+
+cat("Was ein GAM gut kann:\n")
+cat("1) Nichtlineare Zusammenhänge modellieren\n")
+cat("2) Glatte Effekte einzelner Variablen schätzen\n")
+cat("3) Auch Interaktionen modellieren, z.B. mit te(x1, x2)\n")
+cat("4) Oft deutlich besser sein als ein lineares Modell\n\n")
+
+cat("Wie man ein GAM lesen kann:\n")
+cat("- s(x1): glatter Effekt von x1\n")
+cat("- s(x2): glatter Effekt von x2\n")
+cat("- te(x1, x2): gemeinsame glatte Fläche / Interaktion\n")
+cat("- edf in summary(): effective degrees of freedom\n")
+cat("  * edf nahe 1 -> fast linear\n")
+cat("  * größere edf -> stärker gekrümmter Effekt\n\n")
+
+cat("Woran man ein gutes GAM erkennt:\n")
+cat("- kleinere Fehlermaße (RMSE, MAE)\n")
+cat("- Beobachtet-vs-Vorhersage nahe an der Diagonalen\n")
+cat("- Residuen ohne klares Muster\n")
+cat("- Plausible Smooth-Plots\n\n")
+
+cat("Grenzen von GAMs:\n")
+cat("- Ein GAM modelliert in erster Linie den systematischen Mittelwert.\n")
+cat("- Korrelationen im Raum oder in der Zeit werden nicht automatisch erklärt.\n")
+cat("- Wenn Residuen noch räumlich oder zeitlich strukturiert sind,\n")
+cat("  dann braucht man zusätzliche Modellierung.\n\n")
+
+cat("Übertrag auf deine Bachelorarbeit:\n")
+cat("- Bei dir wäre das GAM der Teil, der Vegetation durch Klima erklärt.\n")
+cat("- Also z.B. tf ~ te(precip, tcold, twarm)\n")
+cat("- Danach schaut man auf die Residuen.\n")
+cat("- Wenn dort noch Raum-Zeit-Struktur übrig ist, wird es für Gaußprozesse spannend.\n\n")
+
+cat("=====================================================\n")
+cat(" ENDE\n")
+cat("=====================================================\n")
+```
+
+
+
+```{r}
+set.seed(123)
+
+cat("=====================================================\n")
+cat(" START: Spatio-temporale Gaußprozesse\n")
+cat("=====================================================\n\n")
+
+# ==========================================================
+# 1. Raum-Zeit-Gitter erzeugen
+# ==========================================================
+cat("1) Erzeuge ein kleines Raum-Zeit-Gitter ...\n\n")
+
+n_x <- 10
+n_y <- 8
+n_t <- 12
+
+x_vals <- seq(0, 1, length.out = n_x)
+y_vals <- seq(0, 1, length.out = n_y)
+t_vals <- seq(1, n_t)
+
+grid_st <- expand.grid(
+  x = x_vals,
+  y = y_vals,
+  time = t_vals
+)
+
+n_total <- nrow(grid_st)
+
+cat("Anzahl Raum-Zeit-Punkte:", n_total, "\n")
+cat("Erste Zeilen des Gitters:\n")
+print(head(grid_st))
+cat("\n")
+```
+
+```{r}
+# ==========================================================
+# 2. Mittelwertfunktion definieren
+# ==========================================================
+cat("2) Definiere eine Mittelwertfunktion m(s,t) ...\n\n")
+
+# Wir bauen hier bewusst eine glatte, interpretierbare Struktur:
+# - räumlicher Trend
+# - zeitliche Welle
+# - kleine Raum-Zeit-Interaktion
+
+mean_function <- with(grid_st,
+  1.0 +
+  0.8 * sin(2 * pi * x) +
+  0.5 * cos(2 * pi * y) +
+  0.6 * sin(time / 2) +
+  0.3 * x * time / max(time)
+)
+
+grid_st$mean_true <- mean_function
+
+cat("Zusammenfassung der Mittelwertfunktion:\n")
+print(summary(grid_st$mean_true))
+cat("\n")
+
+cat("Interpretation:\n")
+cat("- Der Mittelwert hängt schon systematisch von Raum und Zeit ab.\n")
+cat("- Der GP beschreibt später zusätzliche korrelierte Schwankungen darum herum.\n\n")
+
+```
+
+```{r}
+# ==========================================================
+# 3. Distanzmatrizen bauen
+# ==========================================================
+cat("3) Berechne räumliche und zeitliche Distanzen ...\n\n")
+
+coords_space <- as.matrix(grid_st[, c("x", "y")])
+D_space <- as.matrix(rdist(coords_space))
+
+coords_time <- matrix(grid_st$time, ncol = 1)
+D_time <- as.matrix(rdist(coords_time))
+
+cat("Dimension der räumlichen Distanzmatrix:", dim(D_space), "\n")
+cat("Dimension der zeitlichen Distanzmatrix:", dim(D_time), "\n\n")
+
+```
+
+```{r}
+# ==========================================================
+# 4. Spatio-temporale Kovarianzfunktion
+# ==========================================================
+cat("4) Definiere eine separable spatio-temporale Kovarianzfunktion ...\n\n")
+
+# Idee:
+# C((s,t),(s',t')) = sigma^2 * exp(- d_space / range_space) * exp(- d_time / range_time)
+
+sigma2 <- 0.7
+range_space <- 0.25
+range_time  <- 3.0
+
+Cov_st <- sigma2 *
+  exp(-D_space / range_space) *
+  exp(-D_time  / range_time)
+
+# kleiner Nugget für numerische Stabilität
+diag(Cov_st) <- diag(Cov_st) + 1e-6
+
+cat("Zusammenfassung der Kovarianzmatrix:\n")
+cat("Dimension:", dim(Cov_st), "\n")
+cat("Min:", min(Cov_st), "\n")
+cat("Max:", max(Cov_st), "\n\n")
+
+cat("Interpretation:\n")
+cat("- Nahe Orte: große räumliche Kovarianz\n")
+cat("- Nahe Zeiten: große zeitliche Kovarianz\n")
+cat("- Weit entfernte Punkte: kleine Kovarianz\n")
+cat("- 'Separable' heißt hier: Raum- und Zeitkorrelation werden multipliziert.\n\n")
+
+```
+
+
+```{r}
+# ==========================================================
+# 5. Gaußprozess simulieren
+# ==========================================================
+cat("5) Simuliere einen spatio-temporalen Gaußprozess ...\n\n")
+
+gp_realization <- as.vector(
+  MASS::mvrnorm(
+    n = 1,
+    mu = rep(0, n_total),
+    Sigma = Cov_st
+  )
+)
+
+grid_st$gp_component <- gp_realization
+
+cat("Zusammenfassung der GP-Komponente:\n")
+print(summary(grid_st$gp_component))
+cat("\n")
+
+# Beobachteter Prozess = Mittelwert + GP + kleines Rauschen
+noise_sd <- 0.08
+grid_st$noise <- rnorm(n_total, sd = noise_sd)
+grid_st$z_obs <- grid_st$mean_true + grid_st$gp_component + grid_st$noise
+
+cat("Zusammenfassung des beobachteten Prozesses z_obs:\n")
+print(summary(grid_st$z_obs))
+cat("\n")
+
+# ==========================================================
+# 6. Warum ist das ein spatio-temporaler GP?
+# ==========================================================
+cat("6) Didaktische Einordnung ...\n\n")
+cat("Der beobachtete Prozess ist hier:\n")
+cat("z(s,t) = m(s,t) + w(s,t) + e(s,t)\n\n")
+cat("mit\n")
+cat("- m(s,t): systematischer Mittelwert\n")
+cat("- w(s,t): spatio-temporaler Gaußprozess\n")
+cat("- e(s,t): unabhängiges Rauschen\n\n")
+
+```
+
+
+```{r}
+# ==========================================================
+# 7. Hilfsfunktion für Karten je Zeitpunkt
+# ==========================================================
+plot_time_slice <- function(df, time_index, value_col, title_prefix) {
+  df_slice <- subset(df, time == time_index)
+  
+  p <- ggplot(df_slice, aes(x = x, y = y, fill = .data[[value_col]])) +
+    geom_tile() +
+    coord_fixed() +
+    labs(
+      title = paste0(title_prefix, " (t = ", time_index, ")"),
+      fill = value_col
+    ) +
+    theme_minimal()
+  
+  print(p)
+}
+
+```
+
+```{r}
+# ==========================================================
+# 8. Raumkarten für einzelne Zeitpunkte
+# ==========================================================
+cat("7) Visualisiere Raumkarten für einzelne Zeitpunkte ...\n\n")
+
+plot_time_slice(grid_st, time_index = 1,  value_col = "mean_true",   title_prefix = "Wahrer Mittelwert")
+plot_time_slice(grid_st, time_index = 1,  value_col = "gp_component", title_prefix = "GP-Komponente")
+plot_time_slice(grid_st, time_index = 1,  value_col = "z_obs",        title_prefix = "Beobachteter Prozess")
+
+plot_time_slice(grid_st, time_index = 6,  value_col = "mean_true",   title_prefix = "Wahrer Mittelwert")
+plot_time_slice(grid_st, time_index = 6,  value_col = "gp_component", title_prefix = "GP-Komponente")
+plot_time_slice(grid_st, time_index = 6,  value_col = "z_obs",        title_prefix = "Beobachteter Prozess")
+
+cat("Interpretation:\n")
+cat("- Der Mittelwert zeigt die großskalige Struktur.\n")
+cat("- Die GP-Komponente zeigt glatte korrelierte Abweichungen.\n")
+cat("- z_obs ist die Summe aus beidem plus kleinem Rauschen.\n\n")
+
+```
+
+```{r}
+# ==========================================================
+# 9. Zeitverlauf an festen Orten
+# ==========================================================
+cat("8) Betrachte Zeitverläufe an festen Orten ...\n\n")
+
+# Wir wählen zwei Orte aus
+loc1 <- subset(grid_st, x == x_vals[3] & y == y_vals[3])
+loc2 <- subset(grid_st, x == x_vals[8] & y == y_vals[6])
+
+p_loc1 <- ggplot(loc1, aes(time, z_obs)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Zeitverlauf an Ort 1", y = "z_obs") +
+  theme_minimal()
+
+p_loc2 <- ggplot(loc2, aes(time, z_obs)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Zeitverlauf an Ort 2", y = "z_obs") +
+  theme_minimal()
+
+print(p_loc1)
+print(p_loc2)
+
+cat("Interpretation:\n")
+cat("- Ein spatio-temporaler Prozess ist nicht nur über den Raum, sondern auch über die Zeit korreliert.\n")
+cat("- Deshalb sehen die Reihen meist glatt und nicht völlig zufällig aus.\n\n")
+
+```
+
+```{r}
+# ==========================================================
+# 10. Beobachtungen künstlich ausdünnen
+# ==========================================================
+cat("9) Erzeuge fehlende Beobachtungen, damit wir vorhersagen können ...\n\n")
+
+set.seed(456)
+missing_idx <- sample(1:n_total, size = round(0.2 * n_total), replace = FALSE)
+
+grid_st$observed <- TRUE
+grid_st$observed[missing_idx] <- FALSE
+
+train_data <- subset(grid_st, observed == TRUE)
+test_data  <- subset(grid_st, observed == FALSE)
+
+cat("Anzahl beobachteter Punkte:", nrow(train_data), "\n")
+cat("Anzahl fehlender Punkte:", nrow(test_data), "\n\n")
+
+```
+
+```{r}
+# ==========================================================
+# 11. Naive GP-Vorhersage
+# ==========================================================
+cat("10) Naive GP-Vorhersage an fehlenden Punkten ...\n\n")
+
+cat("Wir tun jetzt etwas sehr Klassisches:\n")
+cat("- Wir nehmen an, Mittelwertfunktion und Kovarianzparameter seien bekannt.\n")
+cat("- Dann berechnen wir die bedingte Verteilung der fehlenden Werte gegeben die beobachteten.\n\n")
+
+obs_idx <- which(grid_st$observed)
+mis_idx <- which(!grid_st$observed)
+
+Sigma_oo <- Cov_st[obs_idx, obs_idx]
+Sigma_mm <- Cov_st[mis_idx, mis_idx]
+Sigma_mo <- Cov_st[mis_idx, obs_idx]
+Sigma_om <- Cov_st[obs_idx, mis_idx]
+
+mu_obs <- grid_st$mean_true[obs_idx]
+mu_mis <- grid_st$mean_true[mis_idx]
+
+z_obs_train <- grid_st$z_obs[obs_idx]
+
+# Bedingter Erwartungswert:
+# E[Z_mis | Z_obs] = mu_mis + Sigma_mo Sigma_oo^{-1} (z_obs - mu_obs)
+Sigma_oo_inv <- solve(Sigma_oo)
+
+pred_mis <- mu_mis + Sigma_mo %*% Sigma_oo_inv %*% (z_obs_train - mu_obs)
+pred_mis <- as.vector(pred_mis)
+
+test_data$pred_gp <- pred_mis
+test_data$error <- test_data$z_obs - test_data$pred_gp
+
+cat("Zusammenfassung der Vorhersagefehler:\n")
+print(summary(test_data$error))
+cat("\n")
+
+rmse <- function(obs, pred) sqrt(mean((obs - pred)^2))
+mae  <- function(obs, pred) mean(abs(obs - pred))
+
+cat("RMSE der GP-Vorhersage:", rmse(test_data$z_obs, test_data$pred_gp), "\n")
+cat("MAE  der GP-Vorhersage:", mae(test_data$z_obs, test_data$pred_gp), "\n\n")
+```
+
+```{r}
+# ==========================================================
+# 12. Vorhersageplot
+# ==========================================================
+cat("11) Beobachtet vs vorhergesagt an den fehlenden Punkten ...\n\n")
+
+p_pred <- ggplot(test_data, aes(z_obs, pred_gp)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(
+    title = "Beobachtet vs. GP-Vorhersage an fehlenden Punkten",
+    x = "Wahrer Wert",
+    y = "GP-Vorhersage"
+  ) +
+  theme_minimal()
+
+print(p_pred)
+
+p_err_hist <- ggplot(test_data, aes(error)) +
+  geom_histogram(bins = 30) +
+  labs(title = "Histogramm der Vorhersagefehler", x = "Fehler") +
+  theme_minimal()
+
+print(p_err_hist)
+```
+
+```{r}
+# ==========================================================
+# 13. Vorhersagen in ein Gesamtfeld zurückschreiben
+# ==========================================================
+cat("12) Baue ein vollständiges Feld aus beobachteten und vorhergesagten Werten ...\n\n")
+
+grid_st$z_reconstructed <- grid_st$z_obs
+grid_st$z_reconstructed[mis_idx] <- pred_mis
+
+plot_time_slice(grid_st, time_index = 6, value_col = "z_obs",          title_prefix = "Originaler Prozess")
+plot_time_slice(grid_st, time_index = 6, value_col = "z_reconstructed", title_prefix = "Rekonstruierter Prozess")
+
+cat("Interpretation:\n")
+cat("- Der GP nutzt Raum- und Zeitkorrelation, um fehlende Werte sinnvoll zu ergänzen.\n")
+cat("- Nahe beobachtete Punkte in Raum und Zeit helfen bei der Vorhersage.\n\n")
+
+```
+
+```{r}
+# ==========================================================
+# 14. Didaktische Zusammenfassung
+# ==========================================================
+cat("=====================================================\n")
+cat(" INTERPRETATION: Was lernt man hier?\n")
+cat("=====================================================\n\n")
+
+cat("1) Was ist ein spatio-temporaler Prozess?\n")
+cat("   Ein Prozess Z(s,t), der sowohl über den Raum als auch über die Zeit variiert.\n\n")
+
+cat("2) Was ist ein Gaußprozess dabei?\n")
+cat("   Ein stochastisches Modell für glatte, korrelierte Strukturen.\n")
+cat("   Es beschreibt nicht nur Mittelwerte, sondern vor allem Abhängigkeiten.\n\n")
+
+cat("3) Rolle der Kovarianzfunktion:\n")
+cat("   Sie ist das Herzstück des GP.\n")
+cat("   Sie legt fest, wie stark zwei Raum-Zeit-Punkte zusammenhängen.\n\n")
+
+cat("4) Was bedeutet 'separable' Kovarianz?\n")
+cat("   Raum- und Zeitkorrelation werden getrennt modelliert und dann multipliziert.\n")
+cat("   Das ist einfach und didaktisch sehr hilfreich.\n\n")
+
+cat("5) Warum ist das für deine Bachelorarbeit wichtig?\n")
+cat("   Weil ein GP genau die korrelierte Reststruktur in Raum und Zeit modellieren kann,\n")
+cat("   die nach einem GAM oft noch übrig bleibt.\n\n")
+
+cat("6) Typische Modellform in Anwendungen:\n")
+cat("   Y(s,t) = m(X(s,t)) + W(s,t) + e(s,t)\n")
+cat("   mit\n")
+cat("   - m(X(s,t)): Mittelwertteil, z.B. durch ein GAM\n")
+cat("   - W(s,t): spatio-temporaler Gaußprozess\n")
+cat("   - e(s,t): unabhängiger Fehler\n\n")
+
+cat("=====================================================\n")
+cat(" ENDE\n")
+cat("=====================================================\n")
+```
+

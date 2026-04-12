@@ -1,0 +1,9 @@
+"0","cat(""MAE  der GP-Vorhersage:"", mae(test_data$z_obs, test_data$pred_gp), ""\n\n"")
+"
+"1","MAE  der GP-Vorhersage:"
+"1"," "
+"1","0.3030214"
+"1"," "
+"1","
+
+"
