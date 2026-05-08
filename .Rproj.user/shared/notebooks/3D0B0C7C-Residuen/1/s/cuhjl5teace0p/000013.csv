@@ -1,5 +1,0 @@
-"0",""
-"0","# Residuen für einen Zeitpunkt"
-"0","image(lon, lat, eval_out$residual_field[1,,],"
-"0","      main = ""Residuenkarte (Zeitpunkt 1)"")"
-"0",""

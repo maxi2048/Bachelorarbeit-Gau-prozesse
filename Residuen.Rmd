@@ -14,9 +14,6 @@ library(ggplot2)
 
 train_emulator <- function(response, var_list, family, cal_timesteps){
   
-  # -------------------------------------------------------
-  # Kovariaten extrahieren (nur gültige Punkte)
-  # -------------------------------------------------------
   covar <- do.call(cbind.data.frame, lapply(var_list, function(x){
     x[cal_timesteps,,][which(!is.na(response[cal_timesteps,,]))]
   }))
@@ -140,7 +137,7 @@ evaluate_emulator <- function(emulator, response, var_list, val_timesteps) {
       Expl_var = 1 - mean((predict_data - data$tf)^2) / var(data$tf)
     ),
     
-    predictions = predict_data,        s
+    predictions = predict_data,        
     residuals_vec = residuals_vec,     # für Histogramm etc.
     residual_field = residual_field,   # Raum-Zeit-Analyse
     
@@ -244,8 +241,8 @@ print(summary(eval_out$residuals_vec))
 # Histogramm
 # ---------------------------------------------------------
 ggplot(data.frame(res = eval_out$residuals_vec), aes(res)) +
-  geom_histogram(bins = 50) +
-  ggtitle("Histogramm der Residuen")
+  # geom_histogram(bins = 50) +
+  labs("Histogramm der Residuen")
 
 ```
 
@@ -294,15 +291,15 @@ ggplot(data.frame(obs = eval_out$data$tf,
 
 # Mittlerer Bias im Raum
 image(lon, lat, eval_out$mean_residual_field,
-      main = "Mittlere Residuenkarte")
+      main = "Mittlere Residuenkarte", maps::map(add=T,interior=FALSE))
 
 # Fehlerstärke im Raum
 image(lon, lat, eval_out$rmse_field,
-      main = "RMSE-Karte")
+      main = "RMSE-Karte", maps::map(add=T,interior=FALSE))
 
 # Residuen für einen Zeitpunkt
 image(lon, lat, eval_out$residual_field[1,,],
-      main = "Residuenkarte (Zeitpunkt 1)")
+      main = "Residuenkarte (Zeitpunkt 1)",  maps::map(add=T,interior=FALSE))
 
 ```
 
@@ -334,5 +331,9 @@ plot(time_vec[valid_idx],
 
 acf(res_vec[valid_idx],
     main = "ACF der Residuen")
+```
+
+```{r}
+# Locally stationary spatio-temporal interpolation of Arg
 ```
 

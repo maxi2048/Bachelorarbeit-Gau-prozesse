@@ -1,4 +1,0 @@
-"0",""
-"0","# Fehlerstärke im Raum"
-"0","image(lon, lat, eval_out$rmse_field,"
-"0","      main = ""RMSE-Karte"")"

@@ -1,7 +1,0 @@
-"0","# ========================================================="
-"0","# 🔥 Raumstruktur"
-"0","# ========================================================="
-"0",""
-"0","# Mittlerer Bias im Raum"
-"0","image(lon, lat, eval_out$mean_residual_field,"
-"0","      main = ""Mittlere Residuenkarte"")"
