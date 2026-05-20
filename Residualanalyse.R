@@ -48,64 +48,64 @@ pdf("residualanalyse_GAM_ggplot2_simple.pdf", width = 12, height = 8)
 # 1) VERTEILUNG DER RESIDUEN
 # ==============================================================================
 
-p1 <- ggplot(df_val, aes(x = resid_response)) +
-  geom_histogram(aes(y = after_stat(density)),
-                 bins = 80,
-                 fill = "steelblue",
-                 color = "white") +
-  geom_density(color = "red", linewidth = 1) +
-  geom_vline(xintercept = 0, linetype = "dashed") +
+p1 <- ggplot() +
+  geom_histogram(
+    data = df_val,
+    aes(x = resid_response, y = after_stat(density)),
+    bins = 80,
+    fill = "lightblue",
+    color = "white",
+    alpha = 0.65
+  ) +
+  
+  # Validierung zuerst zeichnen
+  geom_density(
+    data = subset(df_resid_compare, Datensatz == "Validierung"),
+    aes(x = resid, color = Datensatz),
+    linewidth = 1.1,
+    linetype = "solid"
+  ) +
+  
+  # Training danach zeichnen, damit es sichtbar darüber liegt
+  geom_density(
+    data = subset(df_resid_compare, Datensatz == "Training"),
+    aes(x = resid, color = Datensatz),
+    linewidth = 1.3,
+    linetype = "dashed"
+  ) +
+  
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray30") +
+  
+  annotate(
+    "label",
+    x = Inf,
+    y = Inf,
+    label = summary_text,
+    hjust = 1.05,
+    vjust = 1.1,
+    size = 3.6,
+    label.size = 0.3,
+    fill = "white",
+    color = "black"
+  ) +
+  
+  scale_color_manual(
+    values = c(
+      "Training" = "darkorange",
+      "Validierung" = "steelblue"
+    )
+  ) +
+  
   labs(
-    title = "Verteilung der Residuen tf - tfhat",
+    title = expression("Empirical Distribution of " * tf - widehat(tf)),
+    subtitle = "Histogramm: Testdata | Density: Train and Test",
     x = "Residuen",
-    y = "Dichte"
+    y = "Dichte",
+    color = "Datensatz"
   ) +
   theme_simple
 
 print(p1)
-
-# p2 <- ggplot(df_val, aes(x = resid_pearson)) +
-#   geom_histogram(aes(y = after_stat(density)),
-#                  bins = 80,
-#                  fill = "darkorange",
-#                  color = "white") +
-#   geom_density(color = "red", linewidth = 1) +
-#   geom_vline(xintercept = 0, linetype = "dashed") +
-#   labs(
-#     title = "Verteilung der Pearson-Residuen",
-#     x = "Pearson-Residuum",
-#     y = "Dichte"
-#   ) +
-#   theme_simple
-# 
-# print(p2)
-
-# ==============================================================================
-# 2) TRAINING VS. VALIDIERUNG
-# ==============================================================================
-
-df_compare <- rbind(
-  data.frame(
-    resid = df_train$resid_response,
-    Datensatz = "Training"
-  ),
-  data.frame(
-    resid = df_val$resid_response,
-    Datensatz = "Validierung"
-  )
-)
-
-p3 <- ggplot(df_compare, aes(x = resid, color = Datensatz)) +
-  geom_density(linewidth = 1) +
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  labs(
-    title = "Dichtevergleich: Training vs. Validierung",
-    x = "Response-Residuum",
-    y = "Dichte"
-  ) +
-  theme_simple
-
-print(p3)
 
 p4 <- ggplot(df_compare, aes(x = Datensatz, y = resid, fill = Datensatz)) +
   geom_boxplot(outlier.alpha = 0.2) +
@@ -154,28 +154,82 @@ print(p5)
 
 p7 <- ggplot(df_val, aes(x = pred, y = resid_response)) +
   geom_point(alpha = 0.08, size = 0.5) +
-  geom_smooth(method = "loess", se = FALSE, color = "orange", linewidth = 1) +
+  
+  # Rand des Parallelogramms
+  geom_segment(aes(x = 0, y = 0, xend = 1, yend = -1),
+               inherit.aes = FALSE,
+               color = "blue", linetype = "dotted", linewidth = 1) +
+  geom_segment(aes(x = 0, y = 1, xend = 1, yend = 0),
+               inherit.aes = FALSE,
+               color = "blue", linetype = "dotted", linewidth = 1) +
+  geom_segment(aes(x = 0, y = 0, xend = 0, yend = 1),
+               inherit.aes = FALSE,
+               color = "blue", linetype = "dotted", linewidth = 1) +
+  geom_segment(aes(x = 1, y = -1, xend = 1, yend = 0),
+               inherit.aes = FALSE,
+               color = "blue", linetype = "dotted", linewidth = 1) +
+  
+  # Referenzlinien
+  geom_smooth(method = "lm", se = FALSE, color = "orange", linewidth = 1) +
   geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  
   labs(
     title = "Residuen vs. vorhergesagte Werte",
-    x = "Vorhergesagter Wert",
-    y = "Residuen"
+    subtitle = expression("Blauer Rand: zulässiger Bereich für " ~ epsilon == tf - widehat(tf)),
+    x = expression("Vorhergesagter Wert " ~ widehat(tf)),
+    y = expression("Residuum " ~ epsilon)
   ) +
+  coord_cartesian(xlim = c(0, 1), ylim = c(-1, 1)) +
   theme_simple
 
 print(p7)
 
-p8 <- ggplot(df_val, aes(x = pred, y = sqrt(abs(resid_response)))) +
-  geom_point(alpha = 0.08, size = 0.5) +
-  geom_smooth(method = "loess", se = FALSE, color = "red", linewidth = 1) +
-  labs(
-    title = "Scale-Location-Plot",
-    x = "Vorhergesagter Wert",
-    y = "sqrt(|Residuum|)"
-  ) +
-  theme_simple
 
-print(p8)
+# Heteroskedastizität nachweisen
+df_val$pred_bin <- cut(
+  df_val$pred,
+  breaks = seq(0, 1, by = 0.1),
+  include.lowest = TRUE
+)
+
+# Empirische Varianz und Standardabweichung pro Intervall
+hetero_stats <- aggregate(
+  resid_response ~ pred_bin,
+  data = df_val,
+  FUN = function(x) c(
+    n = sum(!is.na(x)),
+    mean = mean(x, na.rm = TRUE),
+    var = var(x, na.rm = TRUE),
+    sd = sd(x, na.rm = TRUE),
+    mae = mean(abs(x), na.rm = TRUE)
+  )
+)
+
+# aggregate gibt eine Matrix-Spalte zurück, daher umformen
+hetero_stats <- data.frame(
+  pred_bin = hetero_stats$pred_bin,
+  hetero_stats$resid_response
+)
+
+hetero_stats$varcoef <- hetero_stats$sd/hetero_stats$mean
+
+print(hetero_stats)
+
+# summary(lm(resid_response ~ pred, df_val))
+
+
+
+# p8 <- ggplot(df_val, aes(x = pred, y = sqrt(abs(resid_response)))) +
+#   geom_point(alpha = 0.08, size = 0.5) +
+#   geom_smooth(method = "loess", se = FALSE, color = "red", linewidth = 1) +
+#   labs(
+#     title = "Scale-Location-Plot",
+#     x = "Vorhergesagter Wert",
+#     y = "sqrt(|Residuum|)"
+#   ) +
+#   theme_simple
+# 
+# print(p8)
 
 p9 <- ggplot(df_val, aes(x = tf, y = pred)) +
   geom_point(alpha = 0.08, size = 0.5) +
@@ -221,7 +275,7 @@ for (cov_name in covariates) {
         round(q_99[2], 2), "]"
       ),
       x = cov_name,
-      y = "Response-Residuum"
+      y = "Residuum"
     ) +
     theme_simple
   
@@ -251,7 +305,7 @@ for (cov_name in covariates) {
       labs(
         title = paste("Residuen nach Dezilen von", cov_name),
         x = paste(cov_name, "Dezil"),
-        y = "Response-Residuum"
+        y = "Residuum"
       ) +
       theme_simple +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
@@ -278,7 +332,7 @@ p <- ggplot(df_val, aes(x = tf_class, y = resid_response)) +
   labs(
     title = "Residuen nach beobachtetem Tree Cover",
     x = "Tree-Cover-Klasse",
-    y = "Response-Residuum"
+    y = "Residuum"
   ) +
   theme_simple +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
@@ -299,7 +353,7 @@ p <- ggplot(df_val, aes(x = lat_band, y = resid_response)) +
   labs(
     title = "Residuen nach Breitengrad-Bändern",
     x = "Breitengrad-Band",
-    y = "Response-Residuum"
+    y = "Residuum"
   ) +
   theme_simple +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
@@ -339,7 +393,7 @@ p <- ggplot(time_stats, aes(x = time_val, y = mean_resid)) +
   labs(
     title = "Zeitlicher Bias",
     x = "Zeit",
-    y = "Mittleres Residuum"
+    y = "Durchsch. Residuum"
   ) +
   theme_simple
 

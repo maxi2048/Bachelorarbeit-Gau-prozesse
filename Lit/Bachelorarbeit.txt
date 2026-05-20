@@ -1,0 +1,6 @@
+25-40 Seiten, 
+Statistik-Sicht,
+Expose:
+Introduction muss rein
+Daten beschreiben (Zielvariable, Arraystruktur, Missing Values) 
+Angestrebte Methodik
