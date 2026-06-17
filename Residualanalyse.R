@@ -9,27 +9,6 @@ library(ggplot2)
 # 0) RESIDUEN BERECHNEN
 # ==============================================================================
 
-# Validierung
-df_val$resid_response <- df_val$tf - df_val$pred
-
-df_val$resid_pearson <- (df_val$tf - df_val$pred) /
-  sqrt(pmax(df_val$pred * (1 - df_val$pred), 1e-8))
-
-# Training
-df_train$pred_train <- predict(emulator, newdata = df_train, type = "response")
-
-df_train$resid_response <- df_train$tf - df_train$pred_train
-
-df_train$resid_pearson <- (df_train$tf - df_train$pred_train) /
-  sqrt(pmax(df_train$pred_train * (1 - df_train$pred_train), 1e-8))
-
-# Kürzel
-r_val  <- df_val$resid_response
-rp_val <- df_val$resid_pearson
-fit    <- df_val$pred
-
-n_lon <- length(lon)
-n_lat <- length(lat)
 
 # Einfaches Theme
 theme_simple <- theme_minimal(base_size = 13) +
@@ -42,7 +21,7 @@ theme_simple <- theme_minimal(base_size = 13) +
 # PDF ÖFFNEN
 # ==============================================================================
 
-pdf("residualanalyse_GAM_ggplot2_simple.pdf", width = 12, height = 8)
+pdf("residual.pdf", width = 12, height = 8)
 
 # ==============================================================================
 # 1) VERTEILUNG DER RESIDUEN
@@ -247,7 +226,7 @@ print(p9)
 # 5) RESIDUEN VS. KOVARIATEN
 # ==============================================================================
 
-covariates <- c("precip", "tcold", "twarm")
+covariates <- c("precip", "tcold", "twarm", "co2")
 
 for (cov_name in covariates) {
   

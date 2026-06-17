@@ -2,6 +2,7 @@ library(mgcv)
 library(ncdf4)
 library(fields)
 library(maps)
+library(parallel)
 
 # -------- Funktion: Dataframe erstellen --------------
 make_emulator_df <- function(response, var_list, time, lon, lat) {
@@ -50,7 +51,6 @@ nc <- nc_open("MPI_V3_G_twarm_mean_time.nc")
 time_tmp <- ncvar_get(nc,"time")
 twarm <- aperm(ncvar_get(nc,"temp2")[,48:1,which(time_tmp %in% time)],c(3,1,2))
 
-# Optional: CO2 (falls du es wieder reinnehmen willst)
 co2table <- read.table("CO2_stack_156K_spline_V2.tab",header=TRUE,sep = "\t",skip = 13)
 co2_timeseries <- data.frame(age = -co2table$Age..ka.BP.*1000, co2 = co2table$CO2..µmol.mol.)
 co2_timeseries <- sapply(seq(-20000,-500,by=500), function(t) 
@@ -63,8 +63,8 @@ co2 <- aperm(array(rep(co2_timeseries,each=length(lon)*length(lat)),
 var_list <- list(
   precip = precip,
   tcold  = tcold,
-  twarm  = twarm
-  # co2 = co2   # optional
+  twarm  = twarm,
+  co2 = co2   
 )
 
 # -------- Dataframe erstellen --------------
@@ -95,11 +95,19 @@ df_train <- df[df$time_index %in% cal_timesteps, ]
 df_val   <- df[df$time_index %in% val_timesteps, ]
 
 # -------- Modell (GAM) --------------
+n_cores <- max(1, parallel::detectCores() - 1)
+
+cl <- parallel::makeCluster(n_cores)
+
 emulator <- mgcv::gam(
   tf ~ te(precip, tcold, twarm),
   data = df_train,
-  family = binomial
+  family = binomial,
+  # method = "REML",
+  cluster = cl
 )
+
+parallel::stopCluster(cl)
 
 # -------- Vorhersage --------------
 df_val$pred <- predict(emulator, newdata = df_val, type = "response")
@@ -153,37 +161,61 @@ fields::image.plot(
 )
 maps::map(add = TRUE, interior = FALSE)
 
-### DOne 
+# -------- Vorhersage --------------
+df_val$pred <- predict(emulator, newdata = df_val, type = "response")
 
-eps <- 0.001
-df_train$tf_beta <- pmin(pmax(df_train$tf, eps), 1 - eps)
-df_val$tf_beta   <- pmin(pmax(df_val$tf, eps), 1 - eps)
+# -------- Objekte für Residualanalyse.R vorbereiten --------------
+df_train$pred_train <- predict(emulator, newdata = df_train, type = "response")
 
-emulator_gp <- mgcv::gam(
-  tf_beta ~ 
-    te(precip, tcold, twarm, k = c(10, 10, 10)) +
-    s(lon, lat, time, bs = "gp", k = 200),
-  data = df_train,
-  family = betar(),
-  method = "REML"
+df_val$resid_response <- df_val$tf - df_val$pred
+df_val$resid_pearson <- (df_val$tf - df_val$pred) /
+  sqrt(pmax(df_val$pred * (1 - df_val$pred), 1e-8))
+
+df_train$resid_response <- df_train$tf - df_train$pred_train
+df_train$resid_pearson <- (df_train$tf - df_train$pred_train) /
+  sqrt(pmax(df_train$pred_train * (1 - df_train$pred_train), 1e-8))
+
+df_resid_compare <- rbind(
+  data.frame(
+    Datensatz = "Training",
+    resid = df_train$resid_response
+  ),
+  data.frame(
+    Datensatz = "Validierung",
+    resid = df_val$resid_response
+  )
 )
 
-df_val$pred_gp <- predict(
-  emulator_gp,
-  newdata = df_val,
-  type = "response"
+df_compare <- df_resid_compare
+
+summary_text <- paste0(
+  "Validierung\n",
+  "Bias = ", round(mean(df_val$resid_response, na.rm = TRUE), 5), "\n",
+  "RMSE = ", round(sqrt(mean(df_val$resid_response^2, na.rm = TRUE)), 5), "\n",
+  "MAE = ", round(mean(abs(df_val$resid_response), na.rm = TRUE), 5), "\n",
+  "SD = ", round(sd(df_val$resid_response, na.rm = TRUE), 5)
 )
 
-rmse_gp <- sqrt(mean((df_val$pred_gp - df_val$tf)^2))
-mae_gp  <- mean(abs(df_val$pred_gp - df_val$tf))
-expl_var_gp <- 1 - mean((df_val$pred_gp - df_val$tf)^2) / var(df_val$tf)
 
-data.frame(
-  rmse = rmse_gp,
-  mae = mae_gp,
-  Expl_var = expl_var_gp
-)
+# 
+# df_val$resid_response <- df_val$tf - df_val$pred
+# 
+# df_val$resid_pearson <- (df_val$tf - df_val$pred) /
+#   sqrt(pmax(df_val$pred * (1 - df_val$pred), 1e-8))
+# 
+# # Training
+# df_train$pred_train <- predict(emulator, newdata = df_train, type = "response")
+# 
+# df_train$resid_response <- df_train$tf - df_train$pred_train
+# 
+# df_train$resid_pearson <- (df_train$tf - df_train$pred_train) /
+#   sqrt(pmax(df_train$pred_train * (1 - df_train$pred_train), 1e-8))
 
-gam.check(emulator_gp)
+# Kürzel
+r_val  <- df_val$resid_response
+rp_val <- df_val$resid_pearson
+fit    <- df_val$pred
 
-summary(emulator_gp)
+n_lon <- length(lon)
+n_lat <- length(lat)
+

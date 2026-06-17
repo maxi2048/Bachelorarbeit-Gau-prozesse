@@ -1,0 +1,24 @@
+Zeitplan über 12 Wochen Bachelorarbeit:
+
+Woche 1
+Woche 2
+-Einleitung und Datenteil fertig machen
+Woche 3
+- Residualanalyse fertig machen
+Woche 4 
+-Modellierungsidee für den st Gaußprozess erarbeiten
+Woche 5
+- Implementieren
+Woche 6
+Woche 7
+- Hauptteil st Gaußprozesse herunterschreiben
+Woche 8 
+-Puffer für Hauptteil
+Woche 9
+-Schluss schreiben
+Woche 10 
+-Korrektur lesen etc.
+Woche 11 
+-Korrekturen einarbeiten
+Woche 12
+-Fertig
