@@ -3,3 +3,17 @@ Zusätzliche Quellen
 
 https://www.paulamoraga.com/book-spatial/index.html
 
+https://christophm.github.io/interpretable-ml-book/ale.html?utm_source=chatgpt.com
+
+
+
+Castruccio et al. — "An Anisotropic Model for Global Climate Data"
+
+arXiv:1906.11585
+At the global scale, the paper argues, climatic variables are typically correlated at a shorter range in the latitudinal direction than in the longitudinal, and a fully isotropic kernel is inappropriate. The authors introduce axially symmetric Gaussian processes, where the covariance is stationary only in the longitude variable. This directly applies to  global (lat × lon) domain
+
+Katzfuss & Guinness (2021) — "A General Framework for Vecchia Approximations of Gaussian Processes"
+
+Statistical Science, 36(1):124–141
+The Vecchia framework induces sparse precision matrices and frequently yields state-of-the-art accuracy in spatial applications. Vecchia approximation provides a balance between computational tractability and accuracy, making it a powerful tool for Gaussian process modeling in spatio-temporal fields — it offers a sparse Cholesky decomposition of the precision matrix. This is arguably the leading scalable GP method for large spatial/spatiotemporal datasets in statistics
+

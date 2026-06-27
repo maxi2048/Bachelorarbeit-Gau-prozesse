@@ -7,6 +7,38 @@ Woche 3
 - Residualanalyse fertig machen
 Woche 4 
 -Modellierungsidee für den st Gaußprozess erarbeiten
+
+Best Practice:
+Paper heraussuchen, Methodik extrahieren und versuchen anzuwenden,
+mithilfe von Simulationen etc. überprüfen
+
+Orientierungspaper für die Einleitung auch schon
+
+Einleitung: Tree Cover Thema, Emulator mit IID Setting
+-> Was sind Ansätze um die Spatio Temporale Aspekte zu modellieren
+-> Gaußprozesse
+-> Konkretisieren am Ende der Einleitung 
+
+
+Methodikteil was soll rein ?
+
+
+Einleitung,
+Daten
+Methodik
+GAM 
+st GP
+
+
+Gewichtung der Flächen nicht pauschal
+-> Bei einer Interpretation die auf den Effekt der Residuen eingeht Gewichten
+-> Wenn es um die einzelnen Punkte geht, dann nicht
+
+
+Für GAM Bewertung:
+Partielle Vorhersage Plots -> Partial Dependence Plots
+
+
 Woche 5
 - Implementieren
 Woche 6

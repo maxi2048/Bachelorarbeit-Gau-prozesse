@@ -1,0 +1,514 @@
+---
+title: "Axen_et_al"
+output: html_document
+date: "2026-06-26"
+---
+
+```{r}
+gp_df <- df_val %>%
+  transmute(
+    tf = tf,
+    pred_gam = pred,
+    resid = resid_response,
+    lon = lon_plot,
+    lat = lat,
+    time = time,
+    time_ka = -time / 1000
+  ) 
+```
+
+```{r}
+set.seed(1)
+
+n_train <- 2500
+
+gp_train <- gp_df %>%
+  sample_n(min(n_train, nrow(gp_df)))
+
+cat("GP-Trainingspunkte:", nrow(gp_train), "\n")
+```
+
+```{r}
+# Anisotroper Matérn-3/2 Raumkernel
+# rho_lon und rho_lat sind Längenskalen in Grad.
+matern32_space <- function(lon1, lat1, lon2, lat2, rho_lon, rho_lat) {
+  
+  dx <- outer(lon1, lon2, "-") / rho_lon
+  dy <- outer(lat1, lat2, "-") / rho_lat
+  
+  r <- sqrt(dx^2 + dy^2)
+  
+  K <- (1 + sqrt(3) * r) * exp(-sqrt(3) * r)
+  
+  return(K)
+}
+
+# Matérn-1/2 / Ornstein-Uhlenbeck Zeitkernel
+# rho_time ist die zeitliche Längenskala in ka.
+ou_time <- function(t1, t2, rho_time) {
+  
+  dt <- abs(outer(t1, t2, "-"))
+  
+  K <- exp(-dt / rho_time)
+  
+  return(K)
+}
+
+# Separabler Raum-Zeit-Kernel
+st_kernel <- function(data1, data2, pars) {
+  
+  sigma_f <- pars$sigma_f
+  rho_lon <- pars$rho_lon
+  rho_lat <- pars$rho_lat
+  rho_time <- pars$rho_time
+  
+  K_space <- matern32_space(
+    lon1 = data1$lon,
+    lat1 = data1$lat,
+    lon2 = data2$lon,
+    lat2 = data2$lat,
+    rho_lon = rho_lon,
+    rho_lat = rho_lat
+  )
+  
+  K_time <- ou_time(
+    t1 = data1$time_ka,
+    t2 = data2$time_ka,
+    rho_time = rho_time
+  )
+  
+  K <- sigma_f^2 * K_space * K_time
+  
+  return(K)
+}
+```
+
+
+```{r}
+neg_loglik_gp <- function(theta, data) {
+  
+  # Parameter sind logarithmiert, damit sie positiv bleiben
+  pars <- list(
+    sigma_f  = exp(theta[1]),
+    rho_lon  = exp(theta[2]),
+    rho_lat  = exp(theta[3]),
+    rho_time = exp(theta[4]),
+    sigma_e  = exp(theta[5])
+  )
+  
+  y <- data$resid
+  n <- length(y)
+  
+  K <- st_kernel(data, data, pars)
+  K <- K + diag(pars$sigma_e^2 + 1e-8, n)
+  
+  chol_K <- tryCatch(
+    chol(K),
+    error = function(e) NULL
+  )
+  
+  if (is.null(chol_K)) {
+    return(1e20)
+  }
+  
+  alpha <- backsolve(chol_K, forwardsolve(t(chol_K), y))
+  
+  log_det <- 2 * sum(log(diag(chol_K)))
+  
+  nll <- 0.5 * sum(y * alpha) +
+    0.5 * log_det +
+    0.5 * n * log(2 * pi)
+  
+  return(nll)
+}
+
+```
+
+```{r}
+start_pars <- c(
+  sigma_f  = sd(gp_train$resid, na.rm = TRUE),
+  rho_lon  = 20,
+  rho_lat  = 15,
+  rho_time = 8,
+  sigma_e  = 0.03
+)
+
+theta_start <- log(start_pars)
+
+```
+
+```{r}
+############################################################
+# 6. GP-Hyperparameter per Maximum Likelihood schätzen
+#    mit Progress Bar
+############################################################
+
+library(progress)
+
+# Achtung:
+# optim() ruft die Zielfunktion oft häufiger auf als maxit,
+# weil intern zusätzliche Funktionsauswertungen nötig sind.
+# Daher ist total nur eine grobe Obergrenze.
+max_eval <- 300
+
+pb <- progress_bar$new(
+  format = "GP-Fit [:bar] :percent | eval: :current/:total | nll: :nll | eta: :eta",
+  total = max_eval,
+  clear = FALSE,
+  width = 80
+)
+
+eval_counter <- 0
+last_nll <- NA_real_
+
+neg_loglik_gp_progress <- function(theta, data) {
+  
+  nll <- neg_loglik_gp(theta, data)
+  
+  eval_counter <<- eval_counter + 1
+  last_nll <<- nll
+  
+  if (eval_counter <= max_eval) {
+    pb$tick(tokens = list(nll = round(nll, 2)))
+  }
+  
+  return(nll)
+}
+
+fit_gp <- optim(
+  par = theta_start,
+  fn = neg_loglik_gp_progress,
+  data = gp_train,
+  method = "L-BFGS-B",
+  control = list(
+    maxit = 100
+  )
+)
+
+# Falls optim mehr Funktionsauswertungen gebraucht hat als max_eval
+cat("\nAnzahl Funktionsauswertungen:", eval_counter, "\n")
+
+theta_hat <- fit_gp$par
+
+pars_hat <- list(
+  sigma_f  = exp(theta_hat[1]),
+  rho_lon  = exp(theta_hat[2]),
+  rho_lat  = exp(theta_hat[3]),
+  rho_time = exp(theta_hat[4]),
+  sigma_e  = exp(theta_hat[5])
+)
+
+cat("\nGeschätzte GP-Parameter:\n")
+print(pars_hat)
+
+cat("\nNegative Log-Likelihood:\n")
+print(fit_gp$value)
+
+theta_hat <- fit_gp$par
+
+pars_hat <- list(
+  sigma_f  = exp(theta_hat[1]),
+  rho_lon  = exp(theta_hat[2]),
+  rho_lat  = exp(theta_hat[3]),
+  rho_time = exp(theta_hat[4]),
+  sigma_e  = exp(theta_hat[5])
+)
+
+cat("\nGeschätzte GP-Parameter:\n")
+print(pars_hat)
+
+cat("\nNegative Log-Likelihood:\n")
+print(fit_gp$value)
+
+```
+
+```{r}
+predict_gp <- function(train_data, new_data, pars) {
+  
+  y <- train_data$resid
+  n_train <- nrow(train_data)
+  n_new <- nrow(new_data)
+  
+  K_train <- st_kernel(train_data, train_data, pars)
+  K_train <- K_train + diag(pars$sigma_e^2 + 1e-8, n_train)
+  
+  K_cross <- st_kernel(train_data, new_data, pars)
+  K_new <- st_kernel(new_data, new_data, pars)
+  K_new <- K_new + diag(1e-8, n_new)
+  
+  L <- chol(K_train)
+  
+  alpha <- backsolve(L, forwardsolve(t(L), y))
+  
+  pred_mean <- as.vector(t(K_cross) %*% alpha)
+  
+  v <- forwardsolve(t(L), K_cross)
+  
+  pred_cov <- K_new - t(v) %*% v
+  pred_var <- pmax(diag(pred_cov), 0)
+  pred_sd <- sqrt(pred_var)
+  
+  out <- new_data %>%
+    mutate(
+      gp_mean = pred_mean,
+      gp_sd = pred_sd,
+      gp_lwr = gp_mean - 1.96 * gp_sd,
+      gp_upr = gp_mean + 1.96 * gp_sd,
+      pred_gam_gp = pred_gam + gp_mean,
+      pred_gam_gp_lwr = pred_gam + gp_lwr,
+      pred_gam_gp_upr = pred_gam + gp_upr
+    )
+  
+  return(out)
+}
+
+```
+
+```{r}
+set.seed(456)
+
+gp_test <- gp_df %>%
+  sample_n(min(1000, nrow(gp_df)))
+
+gp_pred <- predict_gp(
+  train_data = gp_train,
+  new_data = gp_test,
+  pars = pars_hat
+)
+
+head(gp_pred)
+```
+
+```{r}
+p_obs_pred <- ggplot(gp_pred, aes(x = tf, y = pred_gam_gp)) +
+  geom_point(alpha = 0.35) +
+  geom_abline(intercept = 0, slope = 1, linewidth = 1) +
+  labs(
+    title = "Beobachteter Tree Cover vs. GAM + GP-Vorhersage",
+    x = "beobachteter Tree Cover",
+    y = "Vorhersage: GAM + Residual-GP"
+  ) +
+  theme_minimal()
+
+print(p_obs_pred)
+```
+
+```{r}
+gp_pred <- gp_pred %>%
+  mutate(
+    resid_gam = tf - pred_gam,
+    resid_gam_gp = tf - pred_gam_gp
+  )
+
+p_resid_compare <- ggplot(gp_pred) +
+  geom_density(aes(x = resid_gam), linewidth = 1) +
+  geom_density(aes(x = resid_gam_gp), linewidth = 1, linetype = "dashed") +
+  labs(
+    title = "Residualverteilung: GAM vs. GAM + GP",
+    subtitle = "Durchgezogene Linie: GAM-Residuen, gestrichelt: Residuen nach GP-Korrektur",
+    x = "Residuum",
+    y = "Dichte"
+  ) +
+  theme_minimal()
+
+print(p_resid_compare)
+```
+
+
+```{r}
+############################################################
+# Validierung: GAM vs. GAM + Residual-GP
+############################################################
+
+library(dplyr)
+library(ggplot2)
+
+############################################################
+# 1. Falls noch keine eindeutige ID existiert
+############################################################
+
+gp_df <- gp_df %>%
+  mutate(row_id = row_number())
+
+# Falls gp_train noch keine row_id hat, neu aus gp_df ziehen:
+set.seed(123)
+
+n_train <- 800
+
+gp_train <- gp_df %>%
+  sample_n(min(n_train, nrow(gp_df)))
+
+############################################################
+# 2. Unabhängiges Test-Subsample ziehen
+############################################################
+
+set.seed(456)
+
+gp_test_pool <- gp_df %>%
+  filter(!(row_id %in% gp_train$row_id))
+
+n_test <- 1000
+
+gp_test <- gp_test_pool %>%
+  sample_n(min(n_test, nrow(gp_test_pool)))
+
+cat("Trainingspunkte:", nrow(gp_train), "\n")
+cat("Testpunkte:", nrow(gp_test), "\n")
+
+############################################################
+# 3. GP-Vorhersage auf Testdaten
+############################################################
+
+gp_pred <- predict_gp(
+  train_data = gp_train,
+  new_data = gp_test,
+  pars = pars_hat
+)
+
+############################################################
+# 4. Fehlermaße definieren
+############################################################
+
+rmse <- function(obs, pred) {
+  sqrt(mean((obs - pred)^2, na.rm = TRUE))
+}
+
+mae <- function(obs, pred) {
+  mean(abs(obs - pred), na.rm = TRUE)
+}
+
+bias <- function(obs, pred) {
+  mean(pred - obs, na.rm = TRUE)
+}
+
+############################################################
+# 5. Vergleich GAM vs. GAM + GP
+############################################################
+
+validation_results <- tibble(
+  model = c("GAM", "GAM + Residual-GP"),
+  RMSE = c(
+    rmse(gp_pred$tf, gp_pred$pred_gam),
+    rmse(gp_pred$tf, gp_pred$pred_gam_gp)
+  ),
+  MAE = c(
+    mae(gp_pred$tf, gp_pred$pred_gam),
+    mae(gp_pred$tf, gp_pred$pred_gam_gp)
+  ),
+  Bias = c(
+    bias(gp_pred$tf, gp_pred$pred_gam),
+    bias(gp_pred$tf, gp_pred$pred_gam_gp)
+  )
+)
+
+print(validation_results)
+
+############################################################
+# 6. Verbesserung in Prozent
+############################################################
+
+rmse_gam <- validation_results$RMSE[validation_results$model == "GAM"]
+rmse_gp  <- validation_results$RMSE[validation_results$model == "GAM + Residual-GP"]
+
+mae_gam <- validation_results$MAE[validation_results$model == "GAM"]
+mae_gp  <- validation_results$MAE[validation_results$model == "GAM + Residual-GP"]
+
+rmse_improvement <- 100 * (rmse_gam - rmse_gp) / rmse_gam
+mae_improvement  <- 100 * (mae_gam - mae_gp) / mae_gam
+
+cat("\nRMSE-Verbesserung durch GP:", round(rmse_improvement, 2), "%\n")
+cat("MAE-Verbesserung durch GP :", round(mae_improvement, 2), "%\n")
+
+############################################################
+# 7. Residuen nach GAM und nach GAM + GP
+############################################################
+
+gp_pred <- gp_pred %>%
+  mutate(
+    resid_gam = tf - pred_gam,
+    resid_gam_gp = tf - pred_gam_gp
+  )
+
+summary(gp_pred$resid_gam)
+summary(gp_pred$resid_gam_gp)
+
+############################################################
+# 8. Plot: Beobachtet vs. Vorhergesagt
+############################################################
+
+p_obs_pred_gam <- ggplot(gp_pred, aes(x = tf, y = pred_gam)) +
+  geom_point(alpha = 0.35) +
+  geom_abline(intercept = 0, slope = 1, linewidth = 1) +
+  labs(
+    title = "Validierung: beobachteter Tree Cover vs. GAM",
+    x = "beobachteter Tree Cover",
+    y = "GAM-Vorhersage"
+  ) +
+  theme_minimal()
+
+print(p_obs_pred_gam)
+
+p_obs_pred_gp <- ggplot(gp_pred, aes(x = tf, y = pred_gam_gp)) +
+  geom_point(alpha = 0.35) +
+  geom_abline(intercept = 0, slope = 1, linewidth = 1) +
+  labs(
+    title = "Validierung: beobachteter Tree Cover vs. GAM + Residual-GP",
+    x = "beobachteter Tree Cover",
+    y = "GAM + GP-Vorhersage"
+  ) +
+  theme_minimal()
+
+print(p_obs_pred_gp)
+
+############################################################
+# 9. Plot: Residuenvergleich
+############################################################
+
+p_resid_density <- ggplot(gp_pred) +
+  geom_density(aes(x = resid_gam), linewidth = 1) +
+  geom_density(aes(x = resid_gam_gp), linewidth = 1, linetype = "dashed") +
+  labs(
+    title = "Residualverteilung auf Testdaten",
+    subtitle = "Durchgezogen: GAM-Residuen; gestrichelt: Residuen nach GP-Korrektur",
+    x = "Residuum",
+    y = "Dichte"
+  ) +
+  theme_minimal()
+
+print(p_resid_density)
+
+############################################################
+# 10. Plot: Residuen gegen Zeit
+############################################################
+
+p_resid_time <- ggplot(gp_pred, aes(x = time_ka)) +
+  geom_point(aes(y = resid_gam), alpha = 0.25) +
+  geom_point(aes(y = resid_gam_gp), alpha = 0.25) +
+  labs(
+    title = "Residuen über die Zeit",
+    subtitle = "Vergleich GAM vs. GAM + Residual-GP",
+    x = "Zeit in ka BP",
+    y = "Residuum"
+  ) +
+  theme_minimal()
+
+print(p_resid_time)
+
+############################################################
+# 11. Ergebnis speichern
+############################################################
+
+saveRDS(
+  list(
+    gp_train = gp_train,
+    gp_test = gp_test,
+    gp_pred = gp_pred,
+    validation_results = validation_results,
+    pars_hat = pars_hat
+  ),
+  file = "GP_validation_GAM_vs_GAM_GP.rds"
+)
+
+cat("\nValidierung gespeichert als: GP_validation_GAM_vs_GAM_GP.rds\n")
+```
+

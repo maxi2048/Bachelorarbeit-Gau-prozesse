@@ -1,0 +1,25 @@
+Thesis Topic:
+Initial situation is the paper 
+Unravelling the tree cover dynamics over the last 20,000 years on the Northern Hemisphere by Dallmeyer et. al. 
+GAM estimated tf ~ te(precip, co2, tcold, twarm)
+
+tf is tree fraction
+
+Spatiotemporal structure is not taken into account 
+The Residuals should be modelled with Gaussian Processes
+
+Lattitude -87.159095 to 87.159095 
+Longitude 0 to 360 
+time 40 Chunks with 500 years each 
+
+
+Data:
+Time | lon | lat | tf | precip | co2 | tcold | twarm | pred | resid_repsonse
+
+
+
+
+The GAM Fit was achieved with a 50% Test/Train Split leaving out all the timechunks with uneven time index, residuals only exist in the Test Data
+
+
+I am looking for papers with a similar statistical problem to use a similar modelling approach
